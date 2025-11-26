@@ -1,7 +1,7 @@
 class Musicapp < Formula
   desc "Self-hosted music library (Gin backend + Vue frontend)"
   homepage "https://github.com/Zimodrok/InformNetw-public"
-  url "https://github.com/Zimodrok/InformNetw-public.git", tag: "v0.1.1", revision: "1a6d28859ef37383b8ddae09e9a05d7c9d2bf1c3"
+  url "https://github.com/Zimodrok/InformNetw-public.git", tag: "v0.1.2", revision: "37254f8fbb2e193dfedfb3c760ec929d72145ee4"
   head "https://github.com/Zimodrok/InformNetw-public.git", branch: "main"
   license "MIT"
 
@@ -9,6 +9,7 @@ class Musicapp < Formula
   depends_on "node" => :build
   depends_on "taglib"
   depends_on "postgresql"
+  depends_on "rclone"
 
   def install
     # Build frontend
@@ -28,6 +29,8 @@ class Musicapp < Formula
   end
 
   def post_install
+    require "securerandom"
+
     pg_bin = Formula["postgresql@14"].opt_bin
     psql = pg_bin/"psql"
     createuser = pg_bin/"createuser"
@@ -52,15 +55,28 @@ class Musicapp < Formula
     host = env["PGHOST"]
     db_url = "postgres://musicapp:@#{host}:5432/musicapp?sslmode=disable"
     system(env.merge("DATABASE_URL" => db_url), (pkgshare/"sql/init_db.sh").to_s)
+
+    key_file = etc/"musicapp.env"
+    unless key_file.exist?
+      key_file.write("SFTP_MASTER_KEY=#{SecureRandom.base64(32)}\n")
+      key_file.chmod(0o600)
+    end
+
+    chmod 0o755, pkgshare/"sql/init_db.sh" if File.exist?(pkgshare/"sql/init_db.sh")
   rescue StandardError => e
     opoo "Automatic database setup failed: #{e}"
   end
 
   service do
     run [opt_bin/"musicapp"]
+    key_file = etc/"musicapp.env"
+    master_key = key_file.exist? ? key_file.read.strip.split("=", 2).last.to_s : ""
+    brew_prefix = HOMEBREW_PREFIX
     environment_variables(
       DATABASE_URL: "postgres://musicapp:@localhost:5432/musicapp?sslmode=disable",
       DIST_DIR: "#{opt_pkgshare}/dist",
+      SFTP_MASTER_KEY: master_key,
+      PATH: "#{brew_prefix}/bin:#{brew_prefix}/sbin:/usr/bin:/bin:/usr/sbin:/sbin",
     )
     keep_alive true
     log_path var/"log/musicapp.log"
