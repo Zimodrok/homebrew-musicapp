@@ -30,6 +30,26 @@ class Musicapp < Formula
 
   def post_install
     require "securerandom"
+    require "json"
+    require "uri"
+
+    config_path = Pathname.new(File.expand_path("~/.config/musicapp/ports.json"))
+    config_path.dirname.mkpath
+
+    defaults = {
+      "api_port" => 8080,
+      "frontend_port" => 4173,
+      "sftp_port" => 9824,
+      "db_url" => "postgres://musicapp:@localhost:5432/musicapp?sslmode=disable",
+    }
+
+    config = defaults.dup
+    if config_path.exist?
+      parsed = JSON.parse(config_path.read) rescue {}
+      config.merge!(parsed)
+    else
+      config_path.write(JSON.pretty_generate(config))
+    end
 
     key_file = etc/"musicapp.env"
     unless key_file.exist?
@@ -44,9 +64,21 @@ class Musicapp < Formula
     createuser = pg_bin/"createuser"
     createdb = pg_bin/"createdb"
 
+    db_url = ENV["DATABASE_URL"].to_s
+    db_url = config["db_url"].to_s if db_url.empty?
+    host = ENV["PGHOST"].to_s
+    if host.empty?
+      begin
+        host = URI.parse(db_url).host || "localhost"
+      rescue URI::InvalidURIError
+        host = "localhost"
+      end
+    end
+
     env = {
-      "PGHOST" => ENV.fetch("PGHOST", "localhost").to_s,
+      "PGHOST" => host,
       "PGUSER" => ENV.fetch("PGUSER", "postgres").to_s,
+      "DATABASE_URL" => db_url,
     }
 
     unless system(env, psql.to_s, "-tAc", "SELECT 1")
@@ -60,9 +92,7 @@ class Musicapp < Formula
     has_db = system(env, psql.to_s, "-tAc", "SELECT 1 FROM pg_database WHERE datname='musicapp'")
     system(env, createdb.to_s, "-O", "musicapp", "musicapp") unless has_db
 
-    host = env["PGHOST"]
-    db_url = "postgres://musicapp:@#{host}:5432/musicapp?sslmode=disable"
-    system(env.merge("DATABASE_URL" => db_url), (pkgshare/"sql/init_db.sh").to_s)
+    system(env, (pkgshare/"sql/init_db.sh").to_s)
 
   rescue StandardError => e
     opoo "Automatic database setup failed: #{e}"
@@ -79,10 +109,15 @@ class Musicapp < Formula
     end
     master_key = SecureRandom.base64(32) if master_key.to_s.empty?
 
+    config_path = Pathname.new(File.expand_path("~/.config/musicapp/ports.json"))
+    db_url = ENV["DATABASE_URL"].to_s
+    db_url = config_path.read[/\"db_url\"\s*:\s*\"([^\"]+)\"/, 1] if db_url.empty? && config_path.exist?
+
     brew_prefix = HOMEBREW_PREFIX
     environment_variables(
-      DATABASE_URL: "postgres://musicapp:@localhost:5432/musicapp?sslmode=disable",
+      DATABASE_URL: db_url.empty? ? "postgres://musicapp:@localhost:5432/musicapp?sslmode=disable" : db_url,
       DIST_DIR: "#{opt_pkgshare}/dist",
+      MUSICAPP_CONFIG: config_path.to_s,
       SFTP_MASTER_KEY: master_key,
       PATH: "#{brew_prefix}/bin:#{brew_prefix}/sbin:/usr/bin:/bin:/usr/sbin:/sbin",
     )
