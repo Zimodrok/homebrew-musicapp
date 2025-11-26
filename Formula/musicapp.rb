@@ -27,6 +27,42 @@ class Musicapp < Formula
     pkgshare.install ".env.example"
   end
 
+  def post_install
+    pg_bin = Formula["postgresql@14"].opt_bin
+    psql = pg_bin/"psql"
+    createuser = pg_bin/"createuser"
+    createdb = pg_bin/"createdb"
+
+    env = {
+      "PGHOST" => ENV.fetch("PGHOST", "localhost"),
+      "PGUSER" => ENV.fetch("PGUSER", "postgres"),
+    }
+
+    unless system(env, psql.to_s, "-tAc", "SELECT 1")
+      opoo "PostgreSQL is not running; skipping automatic DB setup"
+      return
+    end
+
+    has_user = system(env, psql.to_s, "-tAc", "SELECT 1 FROM pg_roles WHERE rolname='musicapp'")
+    system(env, createuser.to_s, "-s", "musicapp") unless has_user
+
+    has_db = system(env, psql.to_s, "-tAc", "SELECT 1 FROM pg_database WHERE datname='musicapp'")
+    system(env, createdb.to_s, "-O", "musicapp", "musicapp") unless has_db
+
+    db_url = "postgres://musicapp:@#{env["PGHOST"]}:5432/musicapp?sslmode=disable"
+    system(env.merge("DATABASE_URL" => db_url), pkgshare/"sql/init_db.sh")
+  rescue StandardError => e
+    opoo "Automatic database setup failed: #{e}"
+  end
+
+  service do
+    run [opt_bin/"musicapp"]
+    environment_variables DATABASE_URL: "postgres://musicapp:@localhost:5432/musicapp?sslmode=disable"
+    keep_alive true
+    log_path var/"log/musicapp.log"
+    error_log_path var/"log/musicapp.log"
+  end
+
   def caveats
     <<~EOS
       Set DATABASE_URL (and optionally DISCOGS_KEY/DISCOGS_SECRET) before running.
