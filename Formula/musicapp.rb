@@ -15,7 +15,7 @@ class Musicapp < Formula
     cd "vue" do
       system "npm", "install"
       system "npm", "run", "build"
-      (pkgshare/"dist").install Dir["dist/**/*"]
+      pkgshare.install "dist"
     end
 
     # Build backend
