@@ -49,7 +49,8 @@ class Musicapp < Formula
     has_db = system(env, psql.to_s, "-tAc", "SELECT 1 FROM pg_database WHERE datname='musicapp'")
     system(env, createdb.to_s, "-O", "musicapp", "musicapp") unless has_db
 
-    db_url = "postgres://musicapp:@#{env["PGHOST"]}:5432/musicapp?sslmode=disable"
+    host = env["PGHOST"]
+    db_url = "postgres://musicapp:@#{host}:5432/musicapp?sslmode=disable"
     system(env.merge("DATABASE_URL" => db_url), (pkgshare/"sql/init_db.sh").to_s)
   rescue StandardError => e
     opoo "Automatic database setup failed: #{e}"
@@ -59,7 +60,7 @@ class Musicapp < Formula
     run [opt_bin/"musicapp"]
     environment_variables(
       DATABASE_URL: "postgres://musicapp:@localhost:5432/musicapp?sslmode=disable",
-      DIST_DIR: "#{pkgshare}/dist",
+      DIST_DIR: "#{opt_pkgshare}/dist",
     )
     keep_alive true
     log_path var/"log/musicapp.log"
