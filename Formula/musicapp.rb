@@ -31,6 +31,14 @@ class Musicapp < Formula
   def post_install
     require "securerandom"
 
+    key_file = etc/"musicapp.env"
+    unless key_file.exist?
+      key_file.write("SFTP_MASTER_KEY=#{SecureRandom.base64(32)}\n")
+      key_file.chmod(0o600)
+    end
+
+    chmod 0o755, pkgshare/"sql/init_db.sh" if File.exist?(pkgshare/"sql/init_db.sh")
+
     pg_bin = Formula["postgresql@14"].opt_bin
     psql = pg_bin/"psql"
     createuser = pg_bin/"createuser"
@@ -56,21 +64,21 @@ class Musicapp < Formula
     db_url = "postgres://musicapp:@#{host}:5432/musicapp?sslmode=disable"
     system(env.merge("DATABASE_URL" => db_url), (pkgshare/"sql/init_db.sh").to_s)
 
-    key_file = etc/"musicapp.env"
-    unless key_file.exist?
-      key_file.write("SFTP_MASTER_KEY=#{SecureRandom.base64(32)}\n")
-      key_file.chmod(0o600)
-    end
-
-    chmod 0o755, pkgshare/"sql/init_db.sh" if File.exist?(pkgshare/"sql/init_db.sh")
   rescue StandardError => e
     opoo "Automatic database setup failed: #{e}"
   end
 
   service do
+    require "securerandom"
+
     run [opt_bin/"musicapp"]
     key_file = etc/"musicapp.env"
-    master_key = key_file.exist? ? key_file.read.strip.split("=", 2).last.to_s : ""
+    master_key = ENV["SFTP_MASTER_KEY"]
+    if master_key.to_s.empty? && key_file.exist?
+      master_key = key_file.read.to_s.strip.split("=", 2).last.to_s
+    end
+    master_key = SecureRandom.base64(32) if master_key.to_s.empty?
+
     brew_prefix = HOMEBREW_PREFIX
     environment_variables(
       DATABASE_URL: "postgres://musicapp:@localhost:5432/musicapp?sslmode=disable",
