@@ -1,7 +1,7 @@
 class Musicapp < Formula
   desc "Self-hosted music library (Gin backend + Vue frontend)"
   homepage "https://github.com/Zimodrok/InformNetw-public"
-  url "https://github.com/Zimodrok/InformNetw-public.git", tag: "v0.1.0", revision: "76beac018e01fe18ed1fd80fda50f28355b887a6"
+  url "https://github.com/Zimodrok/InformNetw-public.git", tag: "v0.1.1", revision: "1a6d28859ef37383b8ddae09e9a05d7c9d2bf1c3"
   head "https://github.com/Zimodrok/InformNetw-public.git", branch: "main"
   license "MIT"
 
@@ -34,8 +34,8 @@ class Musicapp < Formula
     createdb = pg_bin/"createdb"
 
     env = {
-      "PGHOST" => ENV.fetch("PGHOST", "localhost"),
-      "PGUSER" => ENV.fetch("PGUSER", "postgres"),
+      "PGHOST" => ENV.fetch("PGHOST", "localhost").to_s,
+      "PGUSER" => ENV.fetch("PGUSER", "postgres").to_s,
     }
 
     unless system(env, psql.to_s, "-tAc", "SELECT 1")
@@ -50,14 +50,17 @@ class Musicapp < Formula
     system(env, createdb.to_s, "-O", "musicapp", "musicapp") unless has_db
 
     db_url = "postgres://musicapp:@#{env["PGHOST"]}:5432/musicapp?sslmode=disable"
-    system(env.merge("DATABASE_URL" => db_url), pkgshare/"sql/init_db.sh")
+    system(env.merge("DATABASE_URL" => db_url), (pkgshare/"sql/init_db.sh").to_s)
   rescue StandardError => e
     opoo "Automatic database setup failed: #{e}"
   end
 
   service do
     run [opt_bin/"musicapp"]
-    environment_variables DATABASE_URL: "postgres://musicapp:@localhost:5432/musicapp?sslmode=disable"
+    environment_variables(
+      DATABASE_URL: "postgres://musicapp:@localhost:5432/musicapp?sslmode=disable",
+      DIST_DIR: "#{pkgshare}/dist",
+    )
     keep_alive true
     log_path var/"log/musicapp.log"
     error_log_path var/"log/musicapp.log"
