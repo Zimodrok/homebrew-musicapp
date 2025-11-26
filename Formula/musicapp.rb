@@ -19,7 +19,9 @@ class Musicapp < Formula
     end
 
     # Build backend
-    system "go", "build", "-o", bin/"musicapp", "./Gin"
+    cd "Gin" do
+      system "go", "build", "-o", bin/"musicapp"
+    end
 
     pkgshare.install "sql"
     pkgshare.install ".env.example"
