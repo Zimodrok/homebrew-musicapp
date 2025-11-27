@@ -70,7 +70,11 @@ class Musicapp < Formula
 
     chmod 0o755, pkgshare/"sql/init_db.sh" if File.exist?(pkgshare/"sql/init_db.sh")
 
-    pg_bin = Formula["postgresql@14"].opt_bin
+    pg_bin = begin
+      Formula["postgresql@14"].opt_bin
+    rescue
+      Formula["postgresql"].opt_bin
+    end
     psql = pg_bin/"psql"
     createuser = pg_bin/"createuser"
     createdb = pg_bin/"createdb"
@@ -89,21 +93,28 @@ class Musicapp < Formula
     env = {
       "PGHOST" => host,
       "PGUSER" => ENV.fetch("PGUSER", "postgres").to_s,
+      "PGPASSWORD" => ENV["PGPASSWORD"].to_s,
       "DATABASE_URL" => db_url,
     }
+
+    unless psql.exist?
+      opoo "psql not found (is PostgreSQL installed?). Skipping automatic DB setup."
+      return
+    end
 
     unless system(env, psql.to_s, "-tAc", "SELECT 1")
       opoo "PostgreSQL is not running; skipping automatic DB setup"
       return
     end
 
-    has_user = system(env, psql.to_s, "-tAc", "SELECT 1 FROM pg_roles WHERE rolname='musicapp'")
-    system(env, createuser.to_s, "-s", "musicapp") unless has_user
+    has_user = system(env, psql.to_s, "-tAc", "SELECT 1 FROM pg_roles WHERE rolname='musicuser'")
+    system(env, psql.to_s, "-c", "CREATE ROLE musicuser WITH LOGIN PASSWORD 'musicuser'") unless has_user
 
-    has_db = system(env, psql.to_s, "-tAc", "SELECT 1 FROM pg_database WHERE datname='musicapp'")
-    system(env, createdb.to_s, "-O", "musicapp", "musicapp") unless has_db
+    has_db = system(env, psql.to_s, "-tAc", "SELECT 1 FROM pg_database WHERE datname='musicdb'")
+    system(env, createdb.to_s, "-O", "musicuser", "musicdb") unless has_db
 
-    system(env, (pkgshare/"sql/init_db.sh").to_s)
+    schema = pkgshare/"sql/schema.sql"
+    system(env, psql.to_s, "-d", "musicdb", "-f", schema.to_s) if schema.exist?
 
   rescue StandardError => e
     opoo "Automatic database setup failed: #{e}"
