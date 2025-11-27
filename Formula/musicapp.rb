@@ -1,7 +1,7 @@
 class Musicapp < Formula
   desc "Self-hosted music library (Gin backend + Vue frontend)"
   homepage "https://github.com/Zimodrok/InformNetw-public"
-  url "https://github.com/Zimodrok/InformNetw-public.git", tag: "v0.1.16", revision: "a52bd322dc3ac382e0a229acc9f1c848c81f54bd"
+  url "https://github.com/Zimodrok/InformNetw-public.git", tag: "v0.1.16", revision: "a52bd32806fc124525d3aea1b81d8c28c4b121fa"
   head "https://github.com/Zimodrok/InformNetw-public.git", branch: "main"
   license "MIT"
 
