@@ -33,9 +33,19 @@ class Musicapp < Formula
     require "securerandom"
     require "json"
     require "uri"
+    require "fileutils"
 
-    config_path = Pathname.new(File.expand_path("~/.config/musicapp/ports.json"))
-    config_path.dirname.mkpath
+    home_config = Pathname.new(File.expand_path("~/.config/musicapp/ports.json"))
+    etc_config = etc/"musicapp_ports.json"
+    config_path =
+      begin
+        home_config.dirname.mkpath
+        home_config
+      rescue StandardError => e
+        opoo "Could not create #{home_config.dirname}: #{e} - using #{etc_config}"
+        etc_config.dirname.mkpath
+        etc_config
+      end
 
     defaults = {
       "api_port" => 8080,
