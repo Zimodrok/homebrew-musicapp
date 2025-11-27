@@ -97,13 +97,29 @@ class Musicapp < Formula
       "DATABASE_URL" => db_url,
     }
 
+    pg_isready = pg_bin/"pg_isready"
+
     unless psql.exist?
       opoo "psql not found (is PostgreSQL installed?). Skipping automatic DB setup."
       return
     end
 
+    ready = system(env, pg_isready.to_s, "-q")
+    unless ready
+      opoo "PostgreSQL not running; attempting to start via brew services"
+      system "brew", "services", "start", "postgresql@14"
+      sleep 2
+      ready = system(env, pg_isready.to_s, "-q")
+      unless ready
+        5.times do
+          sleep 2
+          break if system(env, pg_isready.to_s, "-q")
+        end
+      end
+    end
+
     unless system(env, psql.to_s, "-tAc", "SELECT 1")
-      opoo "PostgreSQL is not running; skipping automatic DB setup"
+      opoo "PostgreSQL is not available; skipping automatic DB setup"
       return
     end
 
