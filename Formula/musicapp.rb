@@ -126,15 +126,16 @@ class Musicapp < Formula
     has_user = system(env, psql.to_s, "-tAc", "SELECT 1 FROM pg_roles WHERE rolname='musicuser'")
     system(env, psql.to_s, "-c", "CREATE ROLE musicuser WITH LOGIN PASSWORD 'musicuser'") unless has_user
 
-    has_db = system(env, psql.to_s, "-tAc", "SELECT 1 FROM pg_database WHERE datname='musicdb'")
-    system(env, createdb.to_s, "-O", "musicuser", "musicdb") unless has_db
+    %w[musicdb musicapp].each do |db_name|
+      has_db = system(env, psql.to_s, "-tAc", "SELECT 1 FROM pg_database WHERE datname='#{db_name}'")
+      system(env, createdb.to_s, "-O", "musicuser", db_name) unless has_db
 
-    schema = pkgshare/"sql/schema.sql"
-    system(env, psql.to_s, "-d", "musicdb", "-f", schema.to_s) if schema.exist?
+      schema = pkgshare/"sql/schema.sql"
+      system(env, psql.to_s, "-d", db_name, "-f", schema.to_s) if schema.exist?
 
-    # Ensure newer columns exist even on older DBs
-    %w[library_path server_ip].each do |col|
-      system(env, psql.to_s, "-d", "musicdb", "-c", "ALTER TABLE users ADD COLUMN IF NOT EXISTS #{col} text;")
+      %w[library_path server_ip].each do |col|
+        system(env, psql.to_s, "-d", db_name, "-c", "ALTER TABLE users ADD COLUMN IF NOT EXISTS #{col} text;")
+      end
     end
 
   rescue StandardError => e
