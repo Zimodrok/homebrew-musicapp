@@ -126,16 +126,21 @@ class Musicapp < Formula
     has_user = system(env, psql.to_s, "-tAc", "SELECT 1 FROM pg_roles WHERE rolname='musicuser'")
     system(env, psql.to_s, "-c", "CREATE ROLE musicuser WITH LOGIN PASSWORD 'musicuser'") unless has_user
 
-    %w[musicdb musicapp].each do |db_name|
-      has_db = system(env, psql.to_s, "-tAc", "SELECT 1 FROM pg_database WHERE datname='#{db_name}'")
-      system(env, createdb.to_s, "-O", "musicuser", db_name) unless has_db
+    db_name = "musicapp"
+    has_db = system(env, psql.to_s, "-tAc", "SELECT 1 FROM pg_database WHERE datname='#{db_name}'")
+    system(env, createdb.to_s, "-O", "musicuser", db_name) unless has_db
 
+    # Prefer cloning schema from legacy musicdb if it exists
+    has_old = system(env, psql.to_s, "-tAc", "SELECT 1 FROM pg_database WHERE datname='musicdb'")
+    if has_old
+      system(env, "sh", "-c", "pg_dump -s musicdb | psql #{db_name}")
+    else
       schema = pkgshare/"sql/schema.sql"
       system(env, psql.to_s, "-d", db_name, "-f", schema.to_s) if schema.exist?
+    end
 
-      %w[library_path server_ip].each do |col|
-        system(env, psql.to_s, "-d", db_name, "-c", "ALTER TABLE users ADD COLUMN IF NOT EXISTS #{col} text;")
-      end
+    %w[library_path server_ip].each do |col|
+      system(env, psql.to_s, "-d", db_name, "-c", "ALTER TABLE users ADD COLUMN IF NOT EXISTS #{col} text;")
     end
 
   rescue StandardError => e
